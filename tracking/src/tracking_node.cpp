@@ -18,6 +18,8 @@ int pub_frame_n = 0;
 double cur_frame_time = -1;
 double last_frame_time = -1;
 double first_frame_time = -1;
+double last_pub_time = -1;
+
 tracking_parameter* tp = new tracking_parameter();
 tracking* tracking_node;
 ros::Publisher pub_image;
@@ -55,7 +57,9 @@ void image_callback(const sensor_msgs::ImageConstPtr &image_msgs) {
             ptr = cv_bridge::toCvCopy(image_msgs, sensor_msgs::image_encodings::MONO8);
             cv::Mat image = ptr->image;
             TicToc t_tracking;
+            
             if(round(1.0 * pub_frame_n / (cur_frame_time - first_frame_time)) <= tp->freq) {
+                if()
                 sensor_msgs::PointCloudPtr kps_pcl(new sensor_msgs::PointCloud);
                 sensor_msgs::ChannelFloat32 id_of_kps;
                 sensor_msgs::ChannelFloat32 x_of_kps;

@@ -5,7 +5,7 @@
         <param name="config_file" type="string" value="$(arg config_path)" />
     </node>
 
-    <node name="back_end" pkg="back_end" type="back_end" output="screen">
+    <node name="back_end" pkg="back_end" type="back_end" output="log">
         <param name="config_file" type="string" value="$(arg config_path)" />
     </node>
 

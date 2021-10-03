@@ -141,10 +141,10 @@ void optimization() {
         if(frame_time == 0) {
             frame_time = m.feature_msgs->header.stamp.toSec();
         }
-        ROS_INFO("image freq: %d", m.feature_msgs->header.stamp.toSec()-frame_time);
+        ROS_INFO("image freq: %f", m.feature_msgs->header.stamp.toSec()-frame_time);
         frame_time = m.feature_msgs->header.stamp.toSec();
-        ROS_INFO("imu: %d", m.imu_msgs.back()->header.stamp.toSec() - m.imu_msgs.front()->header.stamp.toSec());
-        ROS_INFO("image-feature: %d", m.feature_msgs->header.stamp.toSec() - m.image_msgs->header.stamp.toSec());
+        ROS_INFO("imu: %f", m.imu_msgs.back()->header.stamp.toSec() - m.imu_msgs.front()->header.stamp.toSec());
+        ROS_INFO("image-feature: %f", m.feature_msgs->header.stamp.toSec() - m.image_msgs->header.stamp.toSec());
         optimization_lock.unlock();
     }
 }

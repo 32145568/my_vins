@@ -141,13 +141,11 @@ void optimization() {
         if(frame_time == 0) {
             frame_time = m.feature_msgs->header.stamp.toSec();
         }
-        cout<<"image freq: "<<m.feature_msgs->header.stamp.toSec()-frame_time<<endl;
+        ROS_INFO("image freq: %d", m.feature_msgs->header.stamp.toSec()-frame_time);
         frame_time = m.feature_msgs->header.stamp.toSec();
-        cout<<"imu: "<<m.imu_msgs.back()->header.stamp.toSec() - m.imu_msgs.front()->header.stamp.toSec()<<endl;
-        cout<<"image-feature: "<<m.feature_msgs->header.stamp.toSec() - m.image_msgs->header.stamp.toSec()<<endl;
+        ROS_INFO("imu: %d", m.imu_msgs.back()->header.stamp.toSec() - m.imu_msgs.front()->header.stamp.toSec());
+        ROS_INFO("image-feature: %d", m.feature_msgs->header.stamp.toSec() - m.image_msgs->header.stamp.toSec());
         optimization_lock.unlock();
-
-        cout<<endl;
     }
 }
 

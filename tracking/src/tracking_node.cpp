@@ -1,4 +1,5 @@
 #include <iostream>
+#include <math.h>
 #include <ros/ros.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/PointCloud.h>
@@ -14,7 +15,6 @@ using namespace std;
 bool first_frame = true;
 bool if_pub = false;
 bool if_restart = false;
-int pub_frame_n = 0;
 double cur_frame_time = -1;
 double last_frame_time = -1;
 double first_frame_time = -1;
@@ -33,7 +33,7 @@ void image_callback(const sensor_msgs::ImageConstPtr &image_msgs) {
         cur_frame_time = image_msgs->header.stamp.toSec();
         first_frame_time = image_msgs->header.stamp.toSec();
         last_frame_time = first_frame_time;
-        pub_frame_n = 1;
+        last_pub_time = first_frame_time;
         cv_bridge::CvImageConstPtr ptr;
         ptr = cv_bridge::toCvCopy(image_msgs, sensor_msgs::image_encodings::MONO8);
         cv::Mat image = ptr->image;
@@ -47,7 +47,6 @@ void image_callback(const sensor_msgs::ImageConstPtr &image_msgs) {
             ROS_INFO("there is a falure in feature tracking");
             if_restart = true;
             first_frame = true;
-            pub_frame_n = 0;
             std_msgs::Bool restart_flag;
             restart_flag.data = true;
             pub_restart.publish(restart_flag);
@@ -58,8 +57,8 @@ void image_callback(const sensor_msgs::ImageConstPtr &image_msgs) {
             cv::Mat image = ptr->image;
             TicToc t_tracking;
             
-            if(round(1.0 * pub_frame_n / (cur_frame_time - first_frame_time)) <= tp->freq) {
-                if()
+            if(abs(1.0 / (cur_frame_time - last_pub_time) - tp->freq) < 0.5) {
+                last_pub_time = cur_frame_time;
                 sensor_msgs::PointCloudPtr kps_pcl(new sensor_msgs::PointCloud);
                 sensor_msgs::ChannelFloat32 id_of_kps;
                 sensor_msgs::ChannelFloat32 x_of_kps;
@@ -70,7 +69,6 @@ void image_callback(const sensor_msgs::ImageConstPtr &image_msgs) {
                 kps_pcl->header = image_msgs->header;
                 kps_pcl->header.frame_id = "world";
                 
-                pub_frame_n ++;
                 if_pub = true;
                 TicToc t_f;
                 tracking_node->process(image, cur_frame_time, if_pub);

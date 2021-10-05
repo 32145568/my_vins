@@ -1,3 +1,0 @@
-/home/dongjinhu/code/vins_learn/catkin_ws_1/src/vins/synthetic/build/CMakeFiles/rebuild_cache.dir
-/home/dongjinhu/code/vins_learn/catkin_ws_1/src/vins/synthetic/build/CMakeFiles/synthetic.dir
-/home/dongjinhu/code/vins_learn/catkin_ws_1/src/vins/synthetic/build/CMakeFiles/edit_cache.dir

@@ -8,9 +8,5 @@
     <node name="back_end" pkg="back_end" type="back_end" output="screen">
         <param name="config_file" type="string" value="$(arg config_path)" />
     </node>
-
-    <node name="synthetic" pkg="synthetic" type="synthetic" output="screen">
-        <param name="config_file" type="string" value="$(arg config_path)" />
-    </node>
     
 </launch>

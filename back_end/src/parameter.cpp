@@ -5,6 +5,7 @@ BackEndParameter::BackEndParameter() {
 }
 
 void BackEndParameter::read_ros_parameter(ros::NodeHandle &n) {
+    
     string name = "config_file";
     if(n.getParam(name, config_file)) {
         ROS_INFO("read ros parameter successfully");

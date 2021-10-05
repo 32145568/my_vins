@@ -116,13 +116,15 @@ void tracking::process(cv::Mat &image, double time, bool if_pub) {
 
             int k = temp_kps.size();
             for(size_t i = 0; i < new_kps.size(); i++) {
-                cv::Point2f p, un_p;
+                cv::Point2f p, un_p, v;
                 p = new_kps[i];
+                v.x = -100; v.y = -100;
                 undistorted_keypoint(p, un_p);
                 temp_kps.push_back(p);
                 temp_un_kps.push_back(un_p);
                 temp_ids.push_back(-1);
                 temp_tracked_n.push_back(1);
+                temp_kps_v.push_back(v);
                 correspondence.push_back(i + k);
             }
                        

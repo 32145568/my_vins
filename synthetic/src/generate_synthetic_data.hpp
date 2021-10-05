@@ -6,6 +6,8 @@
 #include <math.h>
 #include <vector>
 #include <unordered_map>
+#include <random>
+
 using namespace std;
 
 #ifndef SYNTHETIC_DATA
@@ -17,11 +19,13 @@ public:
     SyntheticData(double time_, int imu_freq_, int image_freq_, int features_n_, int tracked_n_);
     void generate_pose();
     void generate_imu_data();
+    void generate_imu_data_with_noise();
     void generate_image_data();
+    void generate_image_data_with_noise();
     void mid_point_intergration();
     void check_with_fundmental_matrix();
     void find_correspandence(queue<Eigen::Vector3d> &features_1, queue<Eigen::Vector3d> &features_2, int frame_i, int frame_j);
-
+    
     double time;
     int imu_freq;
     int image_freq;
@@ -31,17 +35,19 @@ public:
 
     int image_col = 752;
     int image_row = 480;
-    int internal_x = 75;
+    int internal_x = 50;
     int internal_y = 48;
 
     double acc_n = sqrt(0.08);
     double gyr_n = sqrt(0.004);
-    double depth = 10.0;
+    double image_n = sqrt(1.5);
+
+    double depth = 5.0;
     double fx = 461.6;
     double fy = 460.3;
     double cx = 363.0;
     double cy = 248.1;    
-    Eigen::Vector3d gyn_bias{0.02, 0.02, 0.02};
+    Eigen::Vector3d gyr_bias{0.05, 0.05, 0.05};
     Eigen::Vector3d acc_bias{0.001, 0.001, 0.001};
     Eigen::Vector3d g{0, 0, -9.81};
     Eigen::Vector3d init_v = Eigen::Vector3d::Zero();
@@ -53,11 +59,13 @@ public:
     queue<int> imu_header;
     queue<int> frame_header;
     
-    vector<Eigen::Vector3d> gyr_with_noise_q;
-    vector<Eigen::Vector3d> acc_with_noise_q;
+    queue<Eigen::Vector3d> gyr_with_noise_q;
+    queue<Eigen::Vector3d> acc_with_noise_q;
 
     vector<queue<Eigen::Vector3d>> features_pre_frame;
-    vector<queue<int>> feature_ids;
+    vector<queue<int>> feature_ids;    
+    vector<queue<cv::Point2f>> features_pre_frame_wn;
+    vector<queue<cv::Point2f>> features_v_pre_frame;
     queue<Eigen::Vector3d> last_frame_features;
     queue<int> last_frame_ids;
 

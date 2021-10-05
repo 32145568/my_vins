@@ -15,7 +15,7 @@
 #include "parameter.hpp"
 
 BackEndParameter *b_p = new BackEndParameter();
-optimization *op = new optimization();
+Optimization *o_p;
 
 ros::Publisher pub_kp_msgs;
 ros::Publisher pub_up_kf_msgs;
@@ -30,21 +30,29 @@ mutex state_lock;
 std::condition_variable con;
 
 bool if_first_image = true;
+bool if_pub = false;
 
-struct measurement {
+struct Measurement {
     sensor_msgs::PointCloudConstPtr feature_msgs;
     queue<sensor_msgs::ImuConstPtr> imu_msgs;
     sensor_msgs::ImageConstPtr image_msgs;
 };
 
 void feature_callback(const sensor_msgs::PointCloudConstPtr &feature_msgs) {
-    queue_lock.lock();
-    feature_q.push(feature_msgs);
-    queue_lock.unlock();
-    con.notify_one();
+    //cout<<"feature"<<endl;
+    if(!if_pub) {
+        if_pub = true;
+    } else {
+        queue_lock.lock();
+        feature_q.push(feature_msgs);
+        queue_lock.unlock();
+        con.notify_one();   
+        if_pub = false;     
+    }
 }
 
 void imu_callback(const sensor_msgs::ImuConstPtr &imu_msgs) {
+    //cout<<"imu"<<endl;
     queue_lock.lock();
     imu_q.push(imu_msgs);
     queue_lock.unlock();
@@ -58,25 +66,26 @@ void restart_callback(const std_msgs::BoolConstPtr &restart_msgs) {
 }
 
 void image_callback(const sensor_msgs::ImageConstPtr &image_msgs) {
+    //cout<<"image"<<endl;
     queue_lock.lock();
     raw_image_q.push(image_msgs);
     queue_lock.unlock();
     con.notify_one();
 }
 
-bool get_measurement(measurement &m) {
+bool get_measurement(Measurement &m) {
     if(imu_q.empty() || feature_q.empty() || raw_image_q.empty()) {
         return false;
     } 
 
-    if(imu_q.front()->header.stamp.toSec() >= feature_q.front()->header.stamp.toSec() + op->td) {
+    if(imu_q.front()->header.stamp.toSec() >= feature_q.front()->header.stamp.toSec() + o_p->td) {
         feature_q.pop();
         while(true) {
             if(raw_image_q.empty()) {
                 break;
             }
             
-            if(raw_image_q.front()->header.stamp.toSec() <= feature_q.front()->header.stamp.toSec()) {
+            if(raw_image_q.front()->header.stamp.toSec() < feature_q.front()->header.stamp.toSec()) {
                 raw_image_q.pop();
             } else {
                 break;
@@ -86,7 +95,7 @@ bool get_measurement(measurement &m) {
         return false;
     }
 
-    if(imu_q.back()->header.stamp.toSec() < feature_q.front()->header.stamp.toSec()) {
+    if(imu_q.back()->header.stamp.toSec() <= feature_q.front()->header.stamp.toSec()) {
         return false;
     }
 
@@ -94,6 +103,10 @@ bool get_measurement(measurement &m) {
     feature_q.pop();
 
     while(true) {
+        if(raw_image_q.empty()) {
+            break;
+        }
+
         if(raw_image_q.front()->header.stamp.toSec() < m.feature_msgs->header.stamp.toSec()) {
             raw_image_q.pop();
         } else {
@@ -113,35 +126,25 @@ bool get_measurement(measurement &m) {
         }
     }
 
-    if(if_first_image) {
-        ROS_INFO("first frame is obtained");
-        if_first_image = false;
-        queue<sensor_msgs::ImuConstPtr> empty_q;
-        swap(empty_q, m.imu_msgs);
-        return false;
-    }
-
     return true;
 }
 
 void optimization() {        
-    double frame_time = 0;
+    //double frame_time = 0;
     while(true) {        
-        measurement m;
+        Measurement m;
 
         std::unique_lock<std::mutex> lock(queue_lock);
         con.wait(lock, [&] {return get_measurement(m);});
         lock.unlock();
 
         optimization_lock.lock();
-        
-        if(frame_time == 0) {
-            frame_time = m.feature_msgs->header.stamp.toSec();
-        }
-        //ROS_INFO("image freq: %f", m.feature_msgs->header.stamp.toSec()-frame_time);
-        frame_time = m.feature_msgs->header.stamp.toSec();
+        o_p->process(m.feature_msgs, m.imu_msgs);
+        //ROS_INFO("image freq: %f", m.feature_msgs->header.stamp.toSec() - frame_time);
+        //frame_time = m.feature_msgs->header.stamp.toSec();
         //ROS_INFO("imu: %f", m.imu_msgs.back()->header.stamp.toSec() - m.imu_msgs.front()->header.stamp.toSec());
         //ROS_INFO("image-feature: %f", m.feature_msgs->header.stamp.toSec() - m.image_msgs->header.stamp.toSec());
+        //ROS_INFO("image-imu: %f", m.feature_msgs->header.stamp.toSec() - m.imu_msgs.back()->header.stamp.toSec());
         optimization_lock.unlock();
     }
 }
@@ -153,10 +156,13 @@ int main(int argc, char **argv) {
 
     b_p->read_ros_parameter(n);
     b_p->read_back_end_parameter();
-
-    ros::Subscriber sub_feature = n.subscribe("/tracking/feature", 2000, feature_callback);
-    ros::Subscriber sub_imu = n.subscribe(b_p->imu_topic, 2000, imu_callback, ros::TransportHints().tcpNoDelay());
-    ros::Subscriber sub_image = n.subscribe(b_p->image_topic, 2000, image_callback, ros::TransportHints().tcpNoDelay());    
+    o_p = new Optimization(b_p);
+    //ros::Subscriber sub_feature = n.subscribe("/tracking/feature", 2000, feature_callback);
+    //ros::Subscriber sub_imu = n.subscribe(b_p->imu_topic, 2000, imu_callback, ros::TransportHints().tcpNoDelay());
+    //ros::Subscriber sub_image = n.subscribe(b_p->image_topic, 2000, image_callback, ros::TransportHints().tcpNoDelay());    
+    ros::Subscriber sub_feature = n.subscribe("/synthetic/feature", 2000, feature_callback);
+    ros::Subscriber sub_imu = n.subscribe("/synthetic/imu", 2000, imu_callback, ros::TransportHints().tcpNoDelay());
+    ros::Subscriber sub_image = n.subscribe("/synthetic/image", 2000, image_callback);  
     ros::Subscriber sub_restart = n.subscribe("/tracking/restart", 2000, restart_callback);
 
     //pub_kp_msgs = n.advertise<back_end::kf>("keyframe", 1000);

@@ -11,15 +11,15 @@ SyntheticData::SyntheticData(double time_, int imu_freq_, int image_freq_, int f
 
 void SyntheticData::generate_pose() {
     double w_xy = pi / time;
-    double w_z = 4 * pi / time;
-    double radius = 20;
+    double w_z = 2 * pi / time;
+    double radius = 10;
     for(size_t i = 0; i < sampling_freq * time; i++) {
         double x = radius * cos(w_xy * i * delta_time);
         double y = radius * sin(w_xy * i * delta_time);
-        double z = sin(w_z * i * delta_time);
+        double z = sin(w_z * i * delta_time + pi / 6);
         double yaw = w_xy * i *delta_time;
-        double pitch = pi / 6 * sin(w_z * i * delta_time);
-        double roll = pi / 6 * cos(w_z * i * delta_time);
+        double pitch = pi / 6 * sin(w_z * i * delta_time + pi / 3);
+        double roll = pi / 6 * cos(w_z * i * delta_time - pi / 4);
         Eigen::Matrix3d rotation_matrix;
         rotation_matrix = Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ())* 
                                           Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY())*
@@ -149,12 +149,103 @@ void SyntheticData::generate_imu_data() {
     }
 }
 
+void SyntheticData::generate_imu_data_with_noise () {
+    int imu_n =  static_cast<int>(sampling_freq / imu_freq);
+    int frame_n = static_cast<int>(sampling_freq / image_freq);
+    
+    int i = 1;
+    default_random_engine generator;
+    normal_distribution<double> acc_noise(0, acc_n);
+    normal_distribution<double> gyr_noise(0, gyr_n);
+
+    Eigen::Vector3d translation_last = translation_q.front();
+    Eigen::Quaterniond rotation_last = rotation_q.front();
+
+    while(true) {
+        if(translation_q.empty()) {
+            break;
+        } else {
+            Eigen::Vector3d translation = translation_q.front();
+            Eigen::Quaterniond rotation = rotation_q.front();
+            Eigen::Matrix3d rotation_m = rotation_m_q.front();
+
+            translation_q.pop();
+            rotation_q.pop();
+            rotation_m_q.pop();
+
+            if(translation_q.empty()) {
+                break;
+            }
+
+            if(i % imu_n == 0) {
+                Eigen::Quaterniond rotation_next;
+                Eigen::Vector3d translation_next;
+
+                translation_next = translation_q.front();
+                rotation_next = rotation_q.front();
+
+                Eigen::Quaterniond delta_q = rotation_last.inverse() * rotation_next;
+                double delta_rx = delta_q.x() * 2 / delta_q.w();
+                double delta_ry = delta_q.y() * 2 / delta_q.w();
+                double delta_rz = delta_q.z() * 2 / delta_q.w();
+                Eigen::Vector3d gyr{delta_rx / (2 * delta_time), delta_ry / (2 * delta_time), delta_rz / (2 * delta_time)};
+
+                double delta_tx_1 = translation[0] - translation_last[0];
+                double delta_tx_2 = translation_next[0] - translation[0];
+                double delta_ty_1 = translation[1] - translation_last[1];
+                double delta_ty_2 = translation_next[1] - translation[1];
+                double delta_tz_1 = translation[2] - translation_last[2];
+                double delta_tz_2 = translation_next[2] - translation[2];
+
+                double vx_1 = delta_tx_1 / delta_time;
+                double vy_1 = delta_ty_1 / delta_time;
+                double vz_1 = delta_tz_1 / delta_time;
+                double vx_2 = delta_tx_2 / delta_time;
+                double vy_2 = delta_ty_2 / delta_time;
+                double vz_2 = delta_tz_2 / delta_time;
+
+                double delta_vx = vx_2 - vx_1;
+                double delta_vy = vy_2 - vy_1;
+                double delta_vz = vz_2 - vz_1;
+
+                Eigen::Vector3d acc{delta_vx / delta_time, delta_vy / delta_time, delta_vz / delta_time};
+                acc = acc + g;
+                acc = rotation_m.transpose() * acc;
+                acc(0) += acc_noise(generator);
+                acc(1) += acc_noise(generator);
+                acc(2) += acc_noise(generator);
+
+                gyr(0) += gyr_noise(generator);
+                gyr(1) += gyr_noise(generator);
+                gyr(2) += gyr_noise(generator);
+
+                acc = acc + acc_bias;
+                gyr = gyr + gyr_bias;
+
+                gyr_with_noise_q.push(gyr);
+                acc_with_noise_q.push(acc);
+                imu_header.push(i);
+
+                if(i % frame_n == 0) {
+                    pub_rotation_q.push_back(rotation);
+                    pub_translation_q.push_back(translation);
+                    pub_rotation_m_q.push_back(rotation_m);
+                    frame_header.push(i);
+                }
+            }
+            rotation_last = rotation;
+            translation_last = translation;
+            i++;
+        }
+    }
+}
+
 void SyntheticData::generate_image_data() {
     queue<Eigen::Vector3d> temp_frame_features;
     queue<int> temp_frame_ids;
     int global_id = 0;
 
-    for(size_t i = 0; i < 10; i++) {
+    for(size_t i = 0; i < 15; i++) {
         for(size_t j = 0; j < 10; j++) {
             double px = i * internal_x;
             double py = j * internal_y;
@@ -226,7 +317,7 @@ void SyntheticData::generate_image_data() {
         int m = 0;
 
         if(n > 0) {
-            for(size_t i = 0; i < 10; i++) {
+            for(size_t i = 0; i < 15; i++) {
                 for(size_t j = 0; j < 10; j++) {
                     if(m == n) {
                         break;
@@ -251,6 +342,152 @@ void SyntheticData::generate_image_data() {
         last_frame_ids = temp_frame_ids;
         features_pre_frame.push_back(last_frame_features);
         feature_ids.push_back(last_frame_ids);    
+    }
+}
+
+void SyntheticData::generate_image_data_with_noise() {
+    queue<Eigen::Vector3d> temp_frame_features;
+    queue<cv::Point2f> temp_frame_features_wn;
+    queue<cv::Point2f> temp_features_v;
+
+    queue<int> temp_frame_ids;
+    default_random_engine generator;
+    normal_distribution<double> image_noise(0, image_n);
+    int global_id = 0;
+
+    for(size_t i = 0; i < 15; i++) {
+        for(size_t j = 0; j < 10; j++) {
+            double px = i * internal_x;
+            double py = j * internal_y;
+
+            cv::Point2f kp, v;
+
+            px = (px - cx) / fx;
+            py = (py - cy) / fy;
+
+            kp.x = px + image_noise(generator) / fx;
+            kp.y = py + image_noise(generator) / fy;
+            v.x = -100; v.y = -100;
+
+            double un_px = px * depth;
+            double un_py = py * depth;
+            double un_pz = depth;
+
+            Eigen::Vector3d p{un_px, un_py, un_pz};
+            temp_frame_features.push(p);
+            temp_frame_ids.push(global_id);
+            temp_frame_features_wn.push(kp);
+            temp_features_v.push(v);
+
+            global_id ++;
+        }
+    }
+
+    features_pre_frame.push_back(temp_frame_features);
+    feature_ids.push_back(temp_frame_ids);
+    features_pre_frame_wn.push_back(temp_frame_features_wn);
+    features_v_pre_frame.push_back(temp_features_v);
+    last_frame_features = temp_frame_features;
+    last_frame_ids = temp_frame_ids;
+
+    for(size_t i = 1;  i < pub_rotation_q.size(); i++) {
+        int tracked_number = 0;
+        queue<Eigen::Vector3d> temp_frame_features;
+        queue<int> temp_frame_ids;
+        queue<cv::Point2f> temp_frame_features_wn;
+        queue<cv::Point2f> temp_features_v;
+        cv::Mat mask = cv::Mat(image_row, image_col, CV_8UC1, cv::Scalar(255));
+
+        Eigen::Quaterniond temp_rotation = pub_rotation_q[i];
+        Eigen::Vector3d temp_translation = pub_translation_q[i];
+        temp_rotation = temp_rotation.inverse();
+        temp_translation = temp_rotation * temp_translation;
+        temp_translation = - temp_translation;
+
+        while(true) {
+            if(last_frame_ids.empty()) {
+                break;
+            } else {
+                Eigen::Vector3d p, p_;
+                p = last_frame_features.front(); p_ = p;
+                int temp_id = last_frame_ids.front();
+                last_frame_features.pop();
+                last_frame_ids.pop();
+                p = pub_rotation_q[i - 1] * p;
+                p = p + pub_translation_q[i - 1];
+                p = temp_rotation * p + temp_translation;
+
+                if(p(2) <= 0.5) {
+                    continue;
+                }
+
+                double px = p(0) / p(2);
+                double py = p(1) / p(2);
+                int u = static_cast<int>(px * fx + cx);
+                int v = static_cast<int>(py * fy + cy);
+                cv::Point2f kp, kp_v;
+                kp.x = u;
+                kp.y = v;
+
+                if(u > 0 && u < image_col && v > 0 && v < image_row) {
+                    tracked_number ++;
+                    temp_frame_features.push(p);
+                    temp_frame_ids.push(temp_id);
+                    cv::circle(mask, kp, 5, 0, -1);
+                    kp.x = px + image_noise(generator) / fx;
+                    kp.y = py + image_noise(generator) / fy;
+
+                    kp_v.x = (kp.x - p_(0) / p_(2)) * image_freq;
+                    kp_v.y = (kp.y - p_(1) / p_(2)) * image_freq;
+
+                    temp_frame_features_wn.push(kp);
+                    temp_features_v.push(kp_v);
+
+
+                }
+            }
+        }
+        
+        int n = features_n - temp_frame_features.size();
+        int m = 0;
+
+        if(n > 0) {
+            for(size_t i = 0; i < 15; i++) {
+                for(size_t j = 0; j < 10; j++) {
+                    if(m == n) {
+                        break;
+                    }
+                    cv::Point2f kp, kp_v;
+                    kp.x = i * internal_x;
+                    kp.y = j * internal_y;
+                    if(mask.at<uchar>(kp) == 255) {
+                        
+                        double px = (kp.x - cx) / fx;
+                        double py = (kp.y - cy) / fy;  
+                        Eigen::Vector3d temp_p{px * depth, py * depth, depth};
+
+                        kp.x = px + image_noise(generator) / fx;
+                        kp.y = py + image_noise(generator) / fy;
+                        kp_v.x = -100;
+                        kp_v.y = -100;
+
+                        temp_frame_features.push(temp_p);
+                        temp_frame_ids.push(global_id);
+                        temp_frame_features_wn.push(kp);
+                        temp_features_v.push(kp_v);
+                        global_id ++;
+                        m ++;
+                    }
+                }         
+            }
+        }
+
+        last_frame_features = temp_frame_features;
+        last_frame_ids = temp_frame_ids;
+        features_pre_frame.push_back(last_frame_features);
+        feature_ids.push_back(last_frame_ids);    
+        features_pre_frame_wn.push_back(temp_frame_features_wn);
+        features_v_pre_frame.push_back(temp_features_v);
     }
 }
 
@@ -436,3 +673,4 @@ void SyntheticData::mid_point_intergration() {
         }
     }
 }
+

@@ -10,14 +10,11 @@
 #include <queue>
 #include <cv_bridge/cv_bridge.h>
 #include <condition_variable>
-#include "parameter.hpp"
-#include "back_end/kf.h"
-#include "back_end/up_kf.h"
 #include "optimization.hpp"
+#include "imu_factor.hpp"
+#include "parameter.hpp"
 
-using namespace std;
-
-back_end_parameter *b_p = new back_end_parameter();
+BackEndParameter *b_p = new BackEndParameter();
 optimization *op = new optimization();
 
 ros::Publisher pub_kp_msgs;
@@ -141,10 +138,10 @@ void optimization() {
         if(frame_time == 0) {
             frame_time = m.feature_msgs->header.stamp.toSec();
         }
-        ROS_INFO("image freq: %f", m.feature_msgs->header.stamp.toSec()-frame_time);
+        //ROS_INFO("image freq: %f", m.feature_msgs->header.stamp.toSec()-frame_time);
         frame_time = m.feature_msgs->header.stamp.toSec();
-        ROS_INFO("imu: %f", m.imu_msgs.back()->header.stamp.toSec() - m.imu_msgs.front()->header.stamp.toSec());
-        ROS_INFO("image-feature: %f", m.feature_msgs->header.stamp.toSec() - m.image_msgs->header.stamp.toSec());
+        //ROS_INFO("imu: %f", m.imu_msgs.back()->header.stamp.toSec() - m.imu_msgs.front()->header.stamp.toSec());
+        //ROS_INFO("image-feature: %f", m.feature_msgs->header.stamp.toSec() - m.image_msgs->header.stamp.toSec());
         optimization_lock.unlock();
     }
 }
@@ -162,8 +159,8 @@ int main(int argc, char **argv) {
     ros::Subscriber sub_image = n.subscribe(b_p->image_topic, 2000, image_callback, ros::TransportHints().tcpNoDelay());    
     ros::Subscriber sub_restart = n.subscribe("/tracking/restart", 2000, restart_callback);
 
-    pub_kp_msgs = n.advertise<back_end::kf>("keyframe", 1000);
-    pub_up_kf_msgs = n.advertise<back_end::up_kf>("update_keyframe", 1000);
+    //pub_kp_msgs = n.advertise<back_end::kf>("keyframe", 1000);
+    //pub_up_kf_msgs = n.advertise<back_end::up_kf>("update_keyframe", 1000);
 
     thread optimization_thread{optimization};
 

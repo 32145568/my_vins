@@ -1,10 +1,10 @@
 #include "parameter.hpp"
 
-back_end_parameter::back_end_parameter() {
+BackEndParameter::BackEndParameter() {
     ;
 }
 
-void back_end_parameter::read_ros_parameter(ros::NodeHandle &n) {
+void BackEndParameter::read_ros_parameter(ros::NodeHandle &n) {
     string name = "config_file";
     if(n.getParam(name, config_file)) {
         ROS_INFO("read ros parameter successfully");
@@ -14,7 +14,7 @@ void back_end_parameter::read_ros_parameter(ros::NodeHandle &n) {
     }
 }
 
-void back_end_parameter::read_back_end_parameter() {
+void BackEndParameter::read_back_end_parameter() {
     cv::FileStorage read_config(config_file, cv::FileStorage::READ);
     if(!read_config.isOpened()) {
         ROS_INFO("can not open the config file");

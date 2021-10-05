@@ -1,0 +1,8 @@
+<launch>
+    <arg name="config_path" default = "$(find tracking)/../config/euroc_config.yaml" />
+
+    <node name="synthetic" pkg="synthetic" type="synthetic" output="screen">
+        <param name="config_file" type="string" value="$(arg config_path)" />
+    </node>
+    
+</launch>

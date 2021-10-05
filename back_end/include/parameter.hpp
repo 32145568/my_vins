@@ -8,10 +8,13 @@
 
 using namespace std;
 
-class back_end_parameter {
+#ifndef BACK_END_PARAMETER
+#define BACK_END_PARAMETER
+
+class BackEndParameter {
 
 public:
-    back_end_parameter();
+    BackEndParameter();
     void read_ros_parameter(ros::NodeHandle &n);
     void read_back_end_parameter();
 
@@ -49,3 +52,5 @@ public:
     int o_a_bn = 6;
     int o_g_bn = 9;
 };
+
+#endif

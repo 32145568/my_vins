@@ -116,7 +116,7 @@ void LocalMapping::update_depth() {
 bool LocalMapping::compute_parallax(int frame_id) {
     int frame_1 = frame_id - 2;
     int frame_2 = frame_id - 1;
-    check_with_fundmental_matrix(frame_1, frame_2); 
+    //check_with_fundmental_matrix(frame_1, frame_2); 
     int parallax_num = 0;
     double parallax_sum = 0;
 

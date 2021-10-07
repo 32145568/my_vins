@@ -2,6 +2,7 @@
 #include <ros/ros.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/PointCloud.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <sensor_msgs/Image.h>
 #include <std_msgs/Bool.h>
 #include <mutex>
@@ -23,6 +24,7 @@ ros::Publisher pub_up_kf_msgs;
 queue<sensor_msgs::ImuConstPtr> imu_q;
 queue<sensor_msgs::PointCloudConstPtr> feature_q;
 queue<sensor_msgs::ImageConstPtr> raw_image_q; 
+queue<geometry_msgs::PoseStampedConstPtr> pose_q;
 
 mutex queue_lock;
 mutex optimization_lock;
@@ -36,6 +38,7 @@ struct Measurement {
     sensor_msgs::PointCloudConstPtr feature_msgs;
     queue<sensor_msgs::ImuConstPtr> imu_msgs;
     sensor_msgs::ImageConstPtr image_msgs;
+    geometry_msgs::PoseStampedConstPtr pose;
 };
 
 void feature_callback(const sensor_msgs::PointCloudConstPtr &feature_msgs) {
@@ -73,20 +76,30 @@ void image_callback(const sensor_msgs::ImageConstPtr &image_msgs) {
     con.notify_one();
 }
 
+void pose_callback(const geometry_msgs::PoseStampedConstPtr &pose_msgs) {
+    queue_lock.lock();
+    //cout<<pose_msgs->header.stamp.toSec()<<endl;
+    pose_q.push(pose_msgs);
+    queue_lock.unlock();
+    con.notify_one();
+}
+
 bool get_measurement(Measurement &m) {
-    if(imu_q.empty() || feature_q.empty() || raw_image_q.empty()) {
+    if(imu_q.empty() || feature_q.empty() || raw_image_q.empty() || pose_q.empty()) {
         return false;
     } 
 
     if(imu_q.front()->header.stamp.toSec() >= feature_q.front()->header.stamp.toSec() + o_p->td) {
+        cout<<21<<endl;
         feature_q.pop();
         while(true) {
-            if(raw_image_q.empty()) {
+            if(raw_image_q.empty() || pose_q.empty()) {
                 break;
             }
             
             if(raw_image_q.front()->header.stamp.toSec() < feature_q.front()->header.stamp.toSec()) {
                 raw_image_q.pop();
+                pose_q.pop();
             } else {
                 break;
             }
@@ -103,19 +116,22 @@ bool get_measurement(Measurement &m) {
     feature_q.pop();
 
     while(true) {
-        if(raw_image_q.empty()) {
+        if(raw_image_q.empty() || pose_q.empty()) {
             break;
         }
 
         if(raw_image_q.front()->header.stamp.toSec() < m.feature_msgs->header.stamp.toSec()) {
             raw_image_q.pop();
+            pose_q.pop();
         } else {
             m.image_msgs = raw_image_q.front();
             raw_image_q.pop();
+            m.pose = pose_q.front();
+            pose_q.pop();
             break;
         }
     }
-
+    
     while(true) {
         if(imu_q.front()->header.stamp.toSec() <= m.feature_msgs->header.stamp.toSec()) {
             m.imu_msgs.push(imu_q.front());
@@ -139,11 +155,11 @@ void optimization() {
         lock.unlock();
 
         optimization_lock.lock();
-        o_p->process(m.feature_msgs, m.imu_msgs);
+        o_p->process(m.feature_msgs, m.imu_msgs, m.pose);
         //ROS_INFO("image freq: %f", m.feature_msgs->header.stamp.toSec() - frame_time);
         //frame_time = m.feature_msgs->header.stamp.toSec();
         //ROS_INFO("imu: %f", m.imu_msgs.back()->header.stamp.toSec() - m.imu_msgs.front()->header.stamp.toSec());
-        //ROS_INFO("image-feature: %f", m.feature_msgs->header.stamp.toSec() - m.image_msgs->header.stamp.toSec());
+        //ROS_INFO("image-feature: %f", m.feature_msgs->header.stamp.toSec() - m.pose->header.stamp.toSec());
         //ROS_INFO("image-imu: %f", m.feature_msgs->header.stamp.toSec() - m.imu_msgs.back()->header.stamp.toSec());
         optimization_lock.unlock();
     }
@@ -164,7 +180,7 @@ int main(int argc, char **argv) {
     ros::Subscriber sub_imu = n.subscribe("/synthetic/imu", 2000, imu_callback, ros::TransportHints().tcpNoDelay());
     ros::Subscriber sub_image = n.subscribe("/synthetic/image", 2000, image_callback);  
     ros::Subscriber sub_restart = n.subscribe("/tracking/restart", 2000, restart_callback);
-
+    ros::Subscriber sub_pose = n.subscribe("/synthetic/pose", 2000, pose_callback);
     //pub_kp_msgs = n.advertise<back_end::kf>("keyframe", 1000);
     //pub_up_kf_msgs = n.advertise<back_end::up_kf>("update_keyframe", 1000);
 

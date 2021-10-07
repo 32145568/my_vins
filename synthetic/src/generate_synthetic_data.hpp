@@ -38,18 +38,27 @@ public:
     int internal_x = 50;
     int internal_y = 48;
 
-    double acc_n = sqrt(0.08);
-    double gyr_n = sqrt(0.004);
-    double image_n = sqrt(1.5);
+    //double acc_n = sqrt(0.08);
+    //double gyr_n = sqrt(0.004);
+    //double image_n = sqrt(1.5);
+    double acc_n = sqrt(0.0);
+    double gyr_n = sqrt(0.0);
+    double image_n = sqrt(0.0);
 
     double depth = 5.0;
     double fx = 461.6;
     double fy = 460.3;
     double cx = 363.0;
     double cy = 248.1;    
+    
     Eigen::Vector3d gyr_bias{0.05, 0.05, 0.05};
     Eigen::Vector3d acc_bias{0.001, 0.001, 0.001};
     Eigen::Vector3d g{0, 0, -9.81};
+
+    //Eigen::Vector3d gyr_bias{0, 0, 0};
+    //Eigen::Vector3d acc_bias{0, 0, 0};
+    //Eigen::Vector3d g{0, 0, 0};
+
     Eigen::Vector3d init_v = Eigen::Vector3d::Zero();
     Eigen::Vector3d init_translation;
     Eigen::Quaterniond init_rotation;

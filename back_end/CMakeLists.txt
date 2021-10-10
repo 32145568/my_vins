@@ -40,6 +40,7 @@ add_executable(back_end
     src/optimization.cpp
     src/imu_factor.cpp
     src/local_mapping.cpp
+    src/utility.cpp
 )
 
 target_link_libraries(back_end ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES})

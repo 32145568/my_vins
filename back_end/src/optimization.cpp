@@ -10,19 +10,37 @@ Optimization::Optimization(BackEndParameter *b_p_) {
     l_m = new LocalMapping(b_p);
 
     for(size_t i = 0; i < window_size; i++) {
-        translation_q[i] = Eigen::Vector3d::Zero();
-        rotation_q[i] = Eigen::Matrix3d::Identity();
-        quaterniond_q[i].x() = 0;
-        quaterniond_q[i].y() = 0;
-        quaterniond_q[i].z() = 0;
-        quaterniond_q[i].w() = 1;
-        velocity_q[i] = Eigen::Vector3d::Zero();
-        acc_bias_q[i] = Eigen::Vector3d::Zero();
-        gyr_bias_q[i] = Eigen::Vector3d::Zero();        
+        Eigen::Map<Eigen::Vector3d> t(para_pose[i], 3);
+        translation_v.push_back(t);
+        translation_v[i] = Eigen::Vector3d::Zero();
+        //translation_v[i](0) = translation_v[i](0) + 1;
+        //t(0) = t(0) + 1;
+        
+        Eigen::Map<Eigen::Quaterniond> q(para_pose[i]+3);
+        rotation_v.push_back(q);
+        rotation_v[i].x() = 0;
+        rotation_v[i].y() = 0;
+        rotation_v[i].z() = 0;
+        rotation_v[i].w() = 1;
+        rotation_m_v.push_back(Eigen::Matrix3d::Identity());
+
+        Eigen::Map<Eigen::Vector3d> v(para_speed_and_bias[i], 3);
+        velocity_v.push_back(v);
+        velocity_v[i] = Eigen::Vector3d::Zero();
+
+        Eigen::Map<Eigen::Vector3d> acc_b(para_speed_and_bias[i]+3, 3);
+        acc_bias_v.push_back(acc_b);
+        acc_bias_v[i] = Eigen::Vector3d::Zero();
+
+        Eigen::Map<Eigen::Vector3d> gyr_b(para_speed_and_bias[i]+6, 3);
+        gyr_bias_v.push_back(gyr_b);
+        gyr_bias_v[i] = Eigen::Vector3d::Zero();       
+
+        //cout<<para_pose[i][0]<<"  "<< para_pose[i][6]<<"  "<<para_pose[i][3]<<endl;
     }
 }
 
-void Optimization::check_imu_propagate(Eigen::Vector3d g, Eigen::Quaterniond q, Eigen::Vector3d t) {
+/*void Optimization::check_imu_propagate(Eigen::Vector3d g, Eigen::Quaterniond q, Eigen::Vector3d t) {
 
     Eigen::Quaterniond pose_q_1 = pose_q_v[frame_count - 1];
     Eigen::Quaterniond pose_q_2 = pose_q_v[frame_count];
@@ -46,11 +64,12 @@ void Optimization::check_imu_propagate(Eigen::Vector3d g, Eigen::Quaterniond q, 
     dx = q_.x() / q_.w();
     dy = q_.y() / q_.w();
     dz = q_.z() / q_.w();
+
     e_q = sqrt(dx * dx + dy * dy + dz * dz);
     e_t = sqrt(t_(0) * t_(0) + t_(1) * t_(1) + t_(2) * t_(2));
 
     //cout<<frame_count<<" : "<<" eq:"<<e_q<<" et:"<<e_t<<"  "<<t_2.norm()<<endl;
-}
+}*/
 
 void Optimization::process(sensor_msgs::PointCloudConstPtr feature_msgs, queue<sensor_msgs::ImuConstPtr> imu_msgs, geometry_msgs::PoseStampedConstPtr pose_msgs) {
     
@@ -59,7 +78,7 @@ void Optimization::process(sensor_msgs::PointCloudConstPtr feature_msgs, queue<s
     Eigen::Vector3d g{0, 0, -9.81};
 
     queue<Eigen::Matrix<double, 7, 1>> temp_features;
-    ImuIntergration *imu_pro = nullptr;
+    ImuFactor *imu_pro = nullptr;
     curr_imu_time = 0;
     last_imu_time = 0;
     
@@ -121,7 +140,7 @@ void Optimization::process(sensor_msgs::PointCloudConstPtr feature_msgs, queue<s
         last_image_time = curr_image_time;
         //cout<<w1<<"  "<<w2<<endl;
     } else {
-        imu_pro = new ImuIntergration(acc_bias, gyr_bias, acc_0, gyr_0);
+        imu_pro = new ImuFactor(acc_bias, gyr_bias, acc_0, gyr_0, b_p);
         sensor_msgs::ImuConstPtr imu;
         Eigen::Vector3d temp_acc;
         Eigen::Vector3d temp_gyr;
@@ -176,6 +195,7 @@ void Optimization::process(sensor_msgs::PointCloudConstPtr feature_msgs, queue<s
 
         imu_pro->add_state(acc_0, gyr_0, temp_delta_t);    
         imu_pro->propagate();
+        imu_factor_v.push_back(imu_pro);
         last_image_time = curr_image_time;
         //cout<<w1<<"  "<<w2<<endl;
     }
@@ -194,11 +214,101 @@ void Optimization::process(sensor_msgs::PointCloudConstPtr feature_msgs, queue<s
 
     pose_t_v.push_back(pose_t);
     pose_q_v.push_back(pose_q);
-    pose_time_v.push_back(pose_time);
+    pose_time_v.push_back(pose_time); 
 
-    if(frame_count >= 2) {
-        check_imu_propagate(g, imu_pro->temp_rotation, imu_pro->temp_translation);
+#if 0
+    if(frame_count == window_size) {
+        translation_v[1] = pose_t_v[1];
+        rotation_v[1] = pose_q_v[1];
+        translation_v[window_size - 1] = pose_t_v[window_size - 1];
+        rotation_v[window_size - 1] = pose_q_v[window_size - 1];
+        ceres::Problem problem;
+        for(size_t i = 1; i < window_size; i++) {
+            Eigen::Vector3d delta_t;
+            delta_t = pose_t_v[i+1] - pose_t_v[i-1];
+            delta_t = delta_t / (pose_time_v[i+1] - pose_time_v[i-1]);
+            /*translation_v[i] = pose_t_v[i];*/
+            rotation_v[i] = pose_q_v[i];
+            velocity_v[i] = delta_t;
+            acc_bias_v[i] = acc_bias;
+            gyr_bias_v[i] = gyr_bias;
+            ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
+            problem.AddParameterBlock(para_pose[i], 7, local_parameterization);
+            problem.AddParameterBlock(para_speed_and_bias[i], 9);
+            problem.SetParameterBlockConstant(para_speed_and_bias[i]);
+
+            if(i == 1) {
+                problem.SetParameterBlockConstant(para_pose[i]);
+            }
+        }
+
+        for(size_t i = 1; i < window_size - 1; i++) {
+            problem.AddResidualBlock(imu_factor_v[i], NULL, para_pose[i], para_speed_and_bias[i], para_pose[i+1], para_speed_and_bias[i+1]);
+        } 
+
+
+        ceres::Solver::Options options;
+        options.linear_solver_type = ceres::DENSE_SCHUR;
+        options.trust_region_strategy_type = ceres::DOGLEG;
+        //options.minimizer_progress_to_stdout=true;
+        options.max_num_iterations = 100;
+        ceres::Solver::Summary summary;
+        ceres::Solve(options, &problem, &summary);
+        cout<<summary.BriefReport()<<endl;
+        
+        for(size_t i = 1; i < window_size; i++) {
+            Eigen::Vector3d delta_t;
+            Eigen::Quaterniond delta_q;
+
+            delta_t = pose_t_v[i] - translation_v[i];
+            delta_q = pose_q_v[i].inverse() * rotation_v[i];
+            Eigen::Vector3d e_q{2*delta_q.x() / delta_q.w(), 2*delta_q.y() / delta_q.w(), 2*delta_q.z() / delta_q.w()};
+
+            cout<<"error t: "<<delta_t.norm()<<"  "<<e_q.norm()<<endl;
+        }
+
     }
+#endif
+
+#if 0
+    if(frame_count == window_size) {
+        for(size_t i = 1; i < window_size - 1; i++) {
+            Eigen::Vector3d delta_t;
+            delta_t = pose_t_v[i+1] - pose_t_v[i-1];
+            delta_t = delta_t / (pose_time_v[i+1] - pose_time_v[i-1]);
+            translation_v[i] = pose_t_v[i];
+            rotation_v[i] = pose_q_v[i];
+            velocity_v[i] = delta_t;
+            acc_bias_v[i] = acc_bias;
+            gyr_bias_v[i] = gyr_bias;
+
+            double **p;
+            double **jacobian;
+            double residual[15];
+
+            p = new double*[4];
+            jacobian = new double*[4];
+            p[0] = para_pose[i];
+            p[1] = para_speed_and_bias[i];
+            p[2] = para_pose[i+1];
+            p[3] = para_speed_and_bias[i+1];
+
+            jacobian[0] = new double[105];
+            jacobian[1] = new double[135];
+            jacobian[2] = new double[105];
+            jacobian[3] = new double[135];
+
+            imu_factor_v[i]->Evaluate(p, residual, jacobian);
+
+            delete [] p;
+            delete [] jacobian[0];
+            delete [] jacobian[1];
+            delete [] jacobian[2];
+            delete [] jacobian[3];
+            delete [] jacobian; 
+        }
+    }
+#endif
 
     frame_count ++;
 }

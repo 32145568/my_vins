@@ -40,7 +40,7 @@ public:
 
     double acc_n = 0.08;
     double gyr_n = 0.004;
-    double image_n = sqrt(1.5);
+    double image_n = 1.5;
     //double acc_n = sqrt(0.0);
     //double gyr_n = sqrt(0.0);
     //double image_n = sqrt(0.0);

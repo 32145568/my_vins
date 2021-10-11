@@ -11,6 +11,7 @@
 #include "back_end/kf.h"
 #include "back_end/up_kf.h"
 #include "parameter.hpp"
+#include "imu_factor.hpp"
 
 using namespace std;
 
@@ -37,6 +38,14 @@ struct MapPoint
     MapPoint* next_addr;
 };
 
+struct Frame 
+{
+    Eigen::Quaterniond orientation;
+    Eigen::Vector3d position;
+    list<int> features_id;
+    ImuFactor *i_f;
+};
+
 class LocalMapping 
 {
 public:
@@ -52,7 +61,7 @@ public:
     MapPoint *first_map_point;
     MapPoint *end_map_point;
     unordered_map<int, MapPoint*> map_idx;
-    vector<list<int>> features_per_frame; 
+    vector<Frame> frames; 
     BackEndParameter *b_p;
 };
 #endif

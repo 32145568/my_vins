@@ -8,7 +8,7 @@ LocalMapping::LocalMapping(BackEndParameter *b_p_) {
 
 void LocalMapping::get_correspondance(int frame_1, int frame_2, queue<Eigen::Vector3d> &points_1, queue<Eigen::Vector3d> &points_2) {
     unordered_map<int, MapPoint*>::iterator it;
-    for(list<int>::iterator it_ls = features_per_frame[frame_1].begin(); it_ls != features_per_frame[frame_1].end(); it_ls++) {
+    for(list<int>::iterator it_ls = frames[frame_1].features_id.begin(); it_ls != frames[frame_1].features_id.end(); it_ls++) {
         int feature_id = *it_ls;
         it = map_idx.find(feature_id);
         if(it == map_idx.end()) {
@@ -38,6 +38,7 @@ void LocalMapping::get_correspondance(int frame_1, int frame_2, queue<Eigen::Vec
 
 bool LocalMapping::insert_new_frame(int frame_id, queue<Eigen::Matrix<double, 7, 1>> &features) {
     list<int> this_frame_ids;
+    Frame f_this;
     int tracked_last_features = 0;
     while(true) {
         if(features.empty()) {
@@ -58,8 +59,6 @@ bool LocalMapping::insert_new_frame(int frame_id, queue<Eigen::Matrix<double, 7,
 
         int feature_id = static_cast<int>(f_m(2, 0));
         this_frame_ids.push_back(feature_id);
-        //cout<<this_frame_ids.size()<<endl;
-        //cout<<feature_id<<endl;
 
         if(first_map_point == nullptr) {
             first_map_point = new MapPoint;
@@ -91,7 +90,8 @@ bool LocalMapping::insert_new_frame(int frame_id, queue<Eigen::Matrix<double, 7,
             }
         }
     }
-    features_per_frame.push_back(this_frame_ids);
+    f_this.features_id = this_frame_ids;
+    frames.push_back(f_this);
     //cout<<tracked_last_features<<endl;
 
     if(frame_id < 2 || tracked_last_features < 20) {
@@ -120,7 +120,7 @@ bool LocalMapping::compute_parallax(int frame_id) {
     int parallax_num = 0;
     double parallax_sum = 0;
 
-    list<int> feature_ids_1 = features_per_frame[frame_1];
+    list<int> feature_ids_1 = frames[frame_1].features_id;
 
     for(list<int>::iterator it = feature_ids_1.begin(); it != feature_ids_1.end(); it++) {
         int feature_id = *it;

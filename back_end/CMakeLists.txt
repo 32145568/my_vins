@@ -39,8 +39,10 @@ add_executable(back_end
     src/parameter.cpp
     src/optimization.cpp
     src/imu_factor.cpp
+    src/visual_measurement_factor.cpp
     src/local_mapping.cpp
     src/utility.cpp
+    src/solve_5pts.cpp
 )
 
 target_link_libraries(back_end ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES})

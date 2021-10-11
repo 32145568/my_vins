@@ -9,11 +9,12 @@
 #include "parameter.hpp"
 #include "local_mapping.hpp"
 #include "imu_factor.hpp"
+#include "visual_measurement_factor.hpp"
 
 #ifndef OPTIMIZATION
 #define OPTIMIZATION
 
-const int window_size = 40;
+const int window_size = 20;
 
 class Optimization {
 public:
@@ -28,15 +29,20 @@ public:
 
     BackEndParameter *b_p;
     LocalMapping *l_m;
-    Eigen::Vector3d translation_ex;
-    Eigen::Matrix3d rotation_ex_matrix;
-    Eigen::Quaterniond rotation_ex;
-    Eigen::Vector3d acc_0;
-    Eigen::Vector3d gyr_0;
     bool if_initial = false;
     bool if_keyframe = false;
     bool if_first_image = true;
-    
+
+    double para_pose[window_size + 1][7];
+    double para_speed_and_bias[window_size + 1][9];
+    double para_ex[1][7];
+    double para_features[1000][1];
+    double td = 0;
+    double last_imu_time = 0;
+    double last_image_time = 0;
+    double curr_imu_time = 0;
+    double curr_image_time = 0;
+
     vector<Eigen::Map<Eigen::Vector3d>> translation_v;
     vector<Eigen::Matrix3d> rotation_m_v;
     vector<Eigen::Map<Eigen::Quaterniond>> rotation_v;
@@ -44,15 +50,11 @@ public:
     vector<Eigen::Map<Eigen::Vector3d>> acc_bias_v;
     vector<Eigen::Map<Eigen::Vector3d>> gyr_bias_v;
     vector<ImuFactor *> imu_factor_v;
-
-    double para_pose[window_size + 1][7];
-    double para_speed_and_bias[window_size + 1][9];
-    double para_rotation_ex[7];
-    double td = 0;
-    double last_imu_time = 0;
-    double last_image_time = 0;
-    double curr_imu_time = 0;
-    double curr_image_time = 0;
+    vector<Eigen::Map<Eigen::Vector3d>> translation_ex;
+    Eigen::Matrix3d rotation_ex_matrix;
+    vector<Eigen::Map<Eigen::Quaterniond>> rotation_ex;
+    Eigen::Vector3d acc_0;
+    Eigen::Vector3d gyr_0;
 
     int frame_count = 0;
     bool if_key_frame = false;

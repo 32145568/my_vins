@@ -5,11 +5,15 @@ bool PoseLocalParameterization::Plus(const double *x, const double *delta, doubl
     Eigen::Map<const Eigen::Quaterniond> rotation(x + 3);
     Eigen::Vector3d delta_translation{delta[0], delta[1], delta[2]};
     Eigen::Quaterniond delta_rotation{1, 0.5 * delta[3], 0.5 * delta[4], 0.5 * delta[5]};
+
     Eigen::Map<Eigen::Vector3d> translation_plus_delta(x_plus_delta);
     Eigen::Map<Eigen::Quaterniond> rotation_plus_delta(x_plus_delta + 3);
-    translation_plus_delta = translation_plus_delta + delta_translation;
-    rotation_plus_delta = rotation * delta_rotation;
-    rotation_plus_delta = rotation_plus_delta.normalized();
+
+    translation_plus_delta = translation + delta_translation;
+    rotation_plus_delta = (rotation * delta_rotation).normalized();
+    /*if(delta_translation.norm() > 0.5) {
+        cout<<delta_translation<<endl;
+    } */
     return true;
 }
 
@@ -430,7 +434,7 @@ bool ImuFactor::Evaluate(double const *const *parameters, double *residuals, dou
         }
     }
 
-#if 0 
+#if 0
     Eigen::Vector3d Pi(parameters[0][0], parameters[0][1], parameters[0][2]);
     Eigen::Quaterniond Qi(parameters[0][6], parameters[0][3], parameters[0][4], parameters[0][5]);
 
@@ -466,7 +470,7 @@ bool ImuFactor::Evaluate(double const *const *parameters, double *residuals, dou
             jacobian_pose_i.block<3, 3>(O_V, O_R) = Utility::skewSymmetric(Qi.inverse() * (g_acc * sum_time + Vj - Vi));
 
             jacobian_pose_i = m_1 - jacobian_pose_i;
-            cout<<jacobian_pose_i.norm()<<endl;
+            cout<<m_1.norm()<<"   "<<jacobian_pose_i.norm()<<endl;
         }
 
         if (jacobians[1])
@@ -484,7 +488,7 @@ bool ImuFactor::Evaluate(double const *const *parameters, double *residuals, dou
             jacobian_speedbias_i.block<3, 3>(O_BG, O_BG - O_V) = -Eigen::Matrix3d::Identity();
 
             jacobian_speedbias_i = jacobian_speedbias_i - m_2;
-            cout<<jacobian_speedbias_i.norm()<<endl;
+            cout<<m_2.norm()<<"   "<<jacobian_speedbias_i.norm()<<endl;
         }
 
         if (jacobians[2])
@@ -496,7 +500,7 @@ bool ImuFactor::Evaluate(double const *const *parameters, double *residuals, dou
             jacobian_pose_j.block<3, 3>(O_R, O_R) = Utility::Qleft(corrected_delta_q.inverse() * Qi.inverse() * Qj).bottomRightCorner<3, 3>();
 
             jacobian_pose_j = jacobian_pose_j - m_3;
-            cout<<jacobian_pose_j.norm()<<endl;
+            cout<<m_3.norm()<<"   "<<jacobian_pose_j.norm()<<endl;
         }
 
         if (jacobians[3])
@@ -508,7 +512,7 @@ bool ImuFactor::Evaluate(double const *const *parameters, double *residuals, dou
             jacobian_speedbias_j.block<3, 3>(O_BG, O_BG - O_V) = Eigen::Matrix3d::Identity();
 
             jacobian_speedbias_j = jacobian_speedbias_j - m_4;
-            cout<<jacobian_speedbias_j.norm()<<endl;
+            cout<<m_4.norm()<<"   "<<jacobian_speedbias_j.norm()<<endl;
         }
     }
 #endif

@@ -1,4 +1,4 @@
-#include "optimization.hpp"
+#include "optimization_v1.hpp"
 #include <random>
 using namespace std;
 
@@ -23,17 +23,9 @@ Optimization::Optimization(BackEndParameter *b_p_) {
         rotation_v[i].w() = 1;
         rotation_m_v.push_back(Eigen::Matrix3d::Identity());
 
-        Eigen::Map<Eigen::Vector3d> v(para_speed_and_bias[i], 3);
+        Eigen::Map<Eigen::Vector3d> v(para_speed[i]);
         velocity_v.push_back(v);
-        velocity_v[i] = Eigen::Vector3d::Zero();
-
-        Eigen::Map<Eigen::Vector3d> acc_b(para_speed_and_bias[i]+3, 3);
-        acc_bias_v.push_back(acc_b);
-        acc_bias_v[i] = Eigen::Vector3d::Zero();
-
-        Eigen::Map<Eigen::Vector3d> gyr_b(para_speed_and_bias[i]+6, 3);
-        gyr_bias_v.push_back(gyr_b);
-        gyr_bias_v[i] = Eigen::Vector3d::Zero();       
+        velocity_v[i] = Eigen::Vector3d::Zero();     
     }
 
     Eigen::Map<Eigen::Vector3d> t_ex(para_ex[0], 3);
@@ -46,6 +38,14 @@ Optimization::Optimization(BackEndParameter *b_p_) {
     rotation_ex[0].w() = 1;
     translation_ex[0] = Eigen::Vector3d::Zero();
     rotation_ex_matrix = rotation_ex[0];
+
+    Eigen::Map<Eigen::Vector3d> acc_b(para_bias[0], 3);
+    acc_bias_v.push_back(acc_b);
+    acc_bias_v[0] = Eigen::Vector3d::Zero();
+
+    Eigen::Map<Eigen::Vector3d> gyr_b(para_bias[0] + 3, 3);
+    gyr_bias_v.push_back(gyr_b);
+    gyr_bias_v[0] = Eigen::Vector3d::Zero();  
 }
 
 #if 0
@@ -82,8 +82,8 @@ void Optimization::check_imu_propagate(Eigen::Vector3d g, Eigen::Quaterniond q, 
 #if 1
 void Optimization::process(sensor_msgs::PointCloudConstPtr feature_msgs, queue<sensor_msgs::ImuConstPtr> imu_msgs, geometry_msgs::PoseStampedConstPtr pose_msgs) {
     
-    Eigen::Vector3d gyr_bias{0.04, 0.04, 0.04};
-    Eigen::Vector3d acc_bias{0.00, 0.00, 0.00};
+    Eigen::Vector3d gyr_bias{0.05, 0.05, 0.05};
+    Eigen::Vector3d acc_bias{0.001, 0.001, 0.001};
     Eigen::Vector3d g{0, 0, -9.81};
 
     queue<Eigen::Matrix<double, 7, 1>> temp_features;
@@ -230,8 +230,9 @@ void Optimization::process(sensor_msgs::PointCloudConstPtr feature_msgs, queue<s
         translation_v[1] = pose_t_v[1];
 
         default_random_engine generator;
-        normal_distribution<double> t_noise(0, 0.2);
-        normal_distribution<double> q_noise(0, 0.05);
+
+        acc_bias_v[0] = acc_bias;
+        gyr_bias_v[0] = gyr_bias;
 
         for(size_t i = 1; i < window_size; i++) {
             Eigen::Vector3d delta_t;
@@ -240,8 +241,9 @@ void Optimization::process(sensor_msgs::PointCloudConstPtr feature_msgs, queue<s
             rotation_v[i] = pose_q_v[i];
             translation_v[i] = pose_t_v[i];
             velocity_v[i] = delta_t;
-            acc_bias_v[i] = acc_bias;
-            gyr_bias_v[i] = gyr_bias;
+        
+            normal_distribution<double> t_noise(0, 0.5 * i * 1.0 / window_size + 0.01);
+            normal_distribution<double> q_noise(0, 0.1 * i * 1.0 / window_size + 0.001);
 
             if(i > 1) {
                 translation_v[i](0) += t_noise(generator);
@@ -254,76 +256,72 @@ void Optimization::process(sensor_msgs::PointCloudConstPtr feature_msgs, queue<s
             }
         }
 
-        for(size_t n = 0; n < 1; n++) {
-            MapPoint *m_p = l_m->first_map_point;
-            int k = 0;
-            ceres::Problem problem;
-            ceres::LossFunction *loss_function;
-            loss_function = new ceres::CauchyLoss(1.0);
+        MapPoint *m_p = l_m->first_map_point;
+        int k = 0;
+        ceres::Problem problem;
+        ceres::LossFunction *loss_function;
+        loss_function = new ceres::CauchyLoss(1.0);
 
-            for(size_t i = 1; i < window_size; i++) {
-
-                ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
-                problem.AddParameterBlock(para_pose[i], 7, local_parameterization);
-                problem.AddParameterBlock(para_speed_and_bias[i], 9);
-
-                if(n % 2 == 1) {
-                    problem.SetParameterBlockConstant(para_pose[i]);
-                } 
-            }
-
+        for(size_t i = 1; i < window_size; i++) {
             ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
-            problem.AddParameterBlock(para_ex[0], 7, local_parameterization);
-            
-            for(size_t i = 1; i < window_size - 1; i++) {
-                ImuFactor *i_m = new ImuFactor(imu_factor_v[i]);
-                problem.AddResidualBlock(i_m, NULL, para_pose[i], para_speed_and_bias[i], para_pose[i+1], para_speed_and_bias[i+1]);
-            } 
-
-            while(true) {
-                if(m_p == nullptr) {
-                    break;
-                } else {
-                    int start_frame_id = m_p->start_frame_id;
-                    vector<Feature> o_b = m_p->observation;
-
-                    if(start_frame_id > window_size - 2 || start_frame_id == 0) {
-                        m_p = m_p->next_addr;
-                        continue;
-                    }
-
-                    para_features[k][0] = 1 / 5.0;
-                    Feature f_start = o_b[0];
-
-                    problem.AddParameterBlock(para_features[k], 1);
-                    if(k <= 10) {
-                        problem.SetParameterBlockConstant(para_features[k]);
-                    }
-
-                    Eigen::Vector3d p_start{f_start.un_px / f_start.un_pz, f_start.un_py / f_start.un_pz, 1};
-
-                    for(size_t i = 1; i < o_b.size(); i++) {
-                        int curr_frame_id = start_frame_id + i;
-                        Feature f_curr = o_b[i];
-                        Eigen::Vector3d p_curr{f_curr.un_px / f_curr.un_pz, f_curr.un_py / f_curr.un_pz, 1};
-                        VisualFactor *v_f = new VisualFactor(b_p, p_start, p_curr);
-                        problem.AddResidualBlock(v_f, loss_function, para_pose[start_frame_id], para_pose[curr_frame_id], para_ex[0], para_features[k]);
-                    }
-
-                    k++;
-                    m_p = m_p->next_addr;
-                }
-            }   
-
-            ceres::Solver::Options options;
-            options.linear_solver_type = ceres::DENSE_SCHUR;
-            options.trust_region_strategy_type = ceres::LEVENBERG_MARQUARDT;
-            options.minimizer_progress_to_stdout=true;
-            options.max_num_iterations = 100;
-            ceres::Solver::Summary summary;
-            ceres::Solve(options, &problem, &summary);
-            cout<<summary.BriefReport()<<endl;
+            problem.AddParameterBlock(para_pose[i], 7, local_parameterization);
+            problem.AddParameterBlock(para_speed[i], 3);
+            //problem.SetParameterBlockConstant(para_pose[i]);
+            //problem.SetParameterBlockConstant(para_speed[i]);
         }
+
+        ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
+        problem.AddParameterBlock(para_ex[0], 7, local_parameterization);
+        problem.AddParameterBlock(para_bias[0], 6);
+        
+        for(size_t i = 1; i < window_size - 1; i++) {
+            ImuFactor *i_m = new ImuFactor(imu_factor_v[i]);
+            problem.AddResidualBlock(i_m, NULL, para_pose[i], para_speed[i], para_pose[i+1], para_speed[i+1], para_bias[0]);
+        } 
+
+        while(true) {
+            if(m_p == nullptr) {
+                break;
+            } else {
+                int start_frame_id = m_p->start_frame_id;
+                vector<Feature> o_b = m_p->observation;
+
+                if(start_frame_id > window_size - 2 || start_frame_id == 0) {
+                    m_p = m_p->next_addr;
+                    continue;
+                }
+
+                para_features[k][0] = 1 / 5.0;
+                Feature f_start = o_b[0];
+
+                problem.AddParameterBlock(para_features[k], 1);
+                if(k <= 5) {
+                    problem.SetParameterBlockConstant(para_features[k]);
+                }
+
+                Eigen::Vector3d p_start{f_start.un_px / f_start.un_pz, f_start.un_py / f_start.un_pz, 1};
+
+                for(size_t i = 1; i < o_b.size(); i++) {
+                    int curr_frame_id = start_frame_id + i;
+                    Feature f_curr = o_b[i];
+                    Eigen::Vector3d p_curr{f_curr.un_px / f_curr.un_pz, f_curr.un_py / f_curr.un_pz, 1};
+                    VisualFactor *v_f = new VisualFactor(b_p, p_start, p_curr);
+                    problem.AddResidualBlock(v_f, loss_function, para_pose[start_frame_id], para_pose[curr_frame_id], para_ex[0], para_features[k]);
+                }
+
+                k++;
+                m_p = m_p->next_addr;
+            }
+        }   
+
+        ceres::Solver::Options options;
+        options.linear_solver_type = ceres::DENSE_SCHUR;
+        options.trust_region_strategy_type = ceres::LEVENBERG_MARQUARDT;
+        options.minimizer_progress_to_stdout=true;
+        options.max_num_iterations = 100;
+        ceres::Solver::Summary summary;
+        ceres::Solve(options, &problem, &summary);
+        cout<<summary.BriefReport()<<endl;
         
         for(size_t i = 1; i < window_size; i++) {
             Eigen::Vector3d delta_t;
@@ -333,12 +331,13 @@ void Optimization::process(sensor_msgs::PointCloudConstPtr feature_msgs, queue<s
             delta_q = pose_q_v[i].inverse() * rotation_v[i];
             Eigen::Vector3d e_q{2*delta_q.x() / delta_q.w(), 2*delta_q.y() / delta_q.w(), 2*delta_q.z() / delta_q.w()};
 
-            //cout<<"error t: "<<delta_t.norm()<<"  "<<e_q.norm()<<endl;
+            cout<<"error t: "<<delta_t.norm()<<"  "<<e_q.norm()<<endl;
             //cout<<translation_v[i]<<endl<<endl;
         }
 
-        cout<<"bias_acc"<<para_speed_and_bias[1][3]<<"  "<<para_speed_and_bias[1][4]<<"  "<<para_speed_and_bias[1][5]<<endl;
-        cout<<"bias_gyr"<<para_speed_and_bias[1][6]<<"  "<<para_speed_and_bias[1][7]<<"  "<<para_speed_and_bias[1][8]<<endl;
+        cout<<"bias_acc"<<para_bias[0][0]<<"  "<<para_bias[0][1]<<"  "<<para_bias[0][2]<<endl;
+        cout<<"bias_gyr"<<para_bias[0][3]<<"  "<<para_bias[0][4]<<"  "<<para_bias[0][5]<<endl;
+        cout<<k<<endl;
 
     }
 #endif
@@ -537,15 +536,17 @@ void Optimization::process(sensor_msgs::PointCloudConstPtr feature_msgs, queue<s
         MapPoint *m_p = l_m->first_map_point;
         int k = 0;
         default_random_engine generator;
-        normal_distribution<double> t_noise(0, 0.5);
-        normal_distribution<double> q_noise(0, 0.1);
 
-        for(size_t i = 0; i < window_size; i++) {
+        for(int i = 0; i < window_size; i++) {
             if(i == 0) {
                 translation_v[i] = pose_t_v[i];
                 rotation_v[i] = pose_q_v[i];
                 continue;
             }
+
+            normal_distribution<double> t_noise(0, 0);
+            normal_distribution<double> q_noise(0, 0);
+
             translation_v[i] = pose_t_v[i];
             translation_v[i](0) += t_noise(generator);
             translation_v[i](1) += t_noise(generator);

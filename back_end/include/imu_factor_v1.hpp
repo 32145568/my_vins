@@ -26,8 +26,8 @@ public:
     Eigen::Quaterniond temp_rotation;
     Eigen::Vector3d temp_translation;
     Eigen::Vector3d temp_velocity;
-    Eigen::Matrix<double, 18, 18> noise_matrix;
-    Eigen::Matrix<double, 15, 15> covariance_matrix;
+    Eigen::Matrix<double, 12, 12> noise_matrix;
+    Eigen::Matrix<double, 9, 9> covariance_matrix;
     Eigen::Matrix<double, 15, 15> jacobian_matrix;
     Eigen::Vector3d g_acc{0, 0, -9.81};
     double temp_delta_t;
@@ -49,7 +49,7 @@ class PoseLocalParameterization : public ceres::LocalParameterization
 };
 
 
-class ImuFactor : public ceres::SizedCostFunction<15, 7, 9, 7, 9>
+class ImuFactor : public ceres::SizedCostFunction<9, 7, 3, 7, 3, 6>
 {
 public:
     ImuFactor(ImuIntergration *i_p_);

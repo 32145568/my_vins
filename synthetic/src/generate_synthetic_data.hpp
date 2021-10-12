@@ -41,9 +41,9 @@ public:
     double acc_n = 0.08;
     double gyr_n = 0.004;
     double image_n = 1.5;
-    //double acc_n = sqrt(0.0);
-    //double gyr_n = sqrt(0.0);
-    //double image_n = sqrt(0.0);
+    /*double acc_n = sqrt(0.0);
+    double gyr_n = sqrt(0.0);
+    double image_n = sqrt(0.0);*/
 
     double depth = 5.0;
     double fx = 461.6;

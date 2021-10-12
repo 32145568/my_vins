@@ -37,8 +37,8 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 add_executable(back_end 
     src/back_end_node.cpp
     src/parameter.cpp
-    src/optimization.cpp
-    src/imu_factor.cpp
+    src/optimization_v1.cpp
+    src/imu_factor_v1.cpp
     src/visual_measurement_factor.cpp
     src/local_mapping.cpp
     src/utility.cpp

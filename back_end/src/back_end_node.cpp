@@ -11,7 +11,7 @@
 #include <queue>
 #include <cv_bridge/cv_bridge.h>
 #include <condition_variable>
-#include "optimization.hpp"
+#include "optimization_v1.hpp"
 #include "imu_factor.hpp"
 #include "parameter.hpp"
 

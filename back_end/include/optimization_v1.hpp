@@ -8,13 +8,13 @@
 #include <geometry_msgs/PoseStamped.h>
 #include "parameter.hpp"
 #include "local_mapping.hpp"
-#include "imu_factor.hpp"
+#include "imu_factor_v1.hpp"
 #include "visual_measurement_factor.hpp"
 
 #ifndef OPTIMIZATION
 #define OPTIMIZATION
 
-const int window_size = 20;
+const int window_size = 30;
 
 class Optimization {
 public:
@@ -34,7 +34,8 @@ public:
     bool if_first_image = true;
 
     double para_pose[window_size + 1][7];
-    double para_speed_and_bias[window_size + 1][9];
+    double para_speed[window_size + 1][3];
+    double para_bias[1][6];
     double para_ex[1][7];
     double para_features[1000][1];
     double td = 0;
